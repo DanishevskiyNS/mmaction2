@@ -1,7 +1,7 @@
 import numpy as np
 
 import torch
-from torchvision.transforms import RandomRotation
+from torchvision.transforms import RandomRotation, RandomPerspective
 from torchvision.transforms import functional as F
 
 from mmcv.transforms import BaseTransform
@@ -63,4 +63,40 @@ class RandomRotateClip(BaseTransform, RandomRotation):
         for i in range(len(results["imgs"])):
             rotated_img = self.forward(torch.from_numpy(results["imgs"][i]), rotation_params)
             results["imgs"][i] = rotated_img.numpy()
+        return results
+
+@TRANSFORMS.register_module()
+class RandomPerspectiveClip(BaseTransform, RandomPerspective):
+    def __init__(self, distortion_scale=0.5, p=0.5, interpolation=F.InterpolationMode.BILINEAR, fill=0):
+        super().__init__(distortion_scale, p, interpolation, fill)
+
+    def forward(self, img, perspective_params):
+        """
+        Args:
+            img (PIL Image or Tensor): Image to be Perspectively transformed.
+
+        Returns:
+            PIL Image or Tensor: Randomly transformed image.
+        """
+
+        fill = self.fill
+        channels, height, width = F.get_dimensions(img)
+        if isinstance(img, torch.Tensor):
+            if isinstance(fill, (int, float)):
+                fill = [float(fill)] * channels
+            else:
+                fill = [float(f) for f in fill]
+        startpoints, endpoints = perspective_params
+        return F.perspective(img, startpoints, endpoints, self.interpolation, fill)
+
+    
+    def transform(self, results):
+        assert "imgs" in results
+        height, width = results["imgs"].shape[-2:]
+        if torch.rand(1) < self.p:
+            perspective_params = self.get_params(width, height, self.distortion_scale)
+            
+            for i in range(len(results["imgs"])):
+                rotated_img = self.forward(torch.from_numpy(results["imgs"][i]), perspective_params)
+                results["imgs"][i] = rotated_img.numpy()
         return results
